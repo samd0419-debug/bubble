@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Bubble Bobble Arcade Ultimate Edition</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        body {
+            background-color: #020208;
+            font-family: 'Courier New', Courier, monospace;
+            color: #ffffff;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+        }
+        #viewport-wrapper {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 640px;
+            height: 580px;
+            display: block;
+        }
+        #game-container {
+            position: relative;
+            width: 640px;
+            height: 440px;
+            background-color: #000000;
+            border: 4px solid #222244;
+            box-shadow: 0 0 30px rgba(0, 100, 255, 0.4);
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            background-color: #000;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 상단 전광판 UI 스타일 */
+        #scoreboard {
+            width: 100%;
+            height: 45px;
+            background: #050510;
+            display: table;
+            border-bottom: 2px solid #222244;
+            padding: 2px 10px;
+        }
+        .score-cell {
+            display: table-cell;
+            vertical-align: middle;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .p1-score { text-align: left; color: #ff4444; }
+        .high-score { text-align: center; color: #44ff44; }
+        .stage-display { text-align: right; color: #ffff44; }
+        .score-val { font-size: 16px; color: #ffffff; display: block; margin-top: 2px; }
+
+        /* 모바일 통합 가상 패드 (A타입 최적화 레이아웃) */
+        #touch-controller-pad {
+            position: absolute;
+            bottom: -130px;
+            left: 0;
+            width: 100%;
+            height: 110px;
+            display: block;
+            pointer-events: none;
+        }
+        .control-group {
+            position: absolute;
+            top: 10px;
+            height: 90px;
+            pointer-events: auto;
+        }
+        .left-group { left: 10px; width: 180px; }
+        .right-group { right: 10px; width: 180px; text-align: right; }
+        
+        .t-btn {
+            display: inline-block;
+            width: 76px;
+            height: 76px;
+            background: rgba(20, 20, 40, 0.75);
+            border: 3px solid rgba(100, 150, 255, 0.4);
+            border-radius: 50%;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 20px;
+            text-align: center;
+            line-height: 70px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.6);
+            margin: 0 5px;
+        }
+        .t-btn:active {
+            background: rgba(100, 150, 255, 0.6);
+            border-color: #ffffff;
+            color: #000000;
+        }
+        #t-shoot {
+            background: rgba(255, 50, 50, 0.35);
+            border-color: rgba(255, 50, 50, 0.6);
+        }
+        #t-shoot:active {
+            background: rgba(255, 50, 50, 0.8);
+        }
+
+        /* 반응형 스케일 다운 제어 (아이폰 및 저해상도 모바일 대응) */
+        @media (max-width: 660px) {
+            #viewport-wrapper {
+                transform: translate(-50%, -50%) scale(0.55);
+            }
+        }
+        @media (max-width: 400px) {
+            #viewport-wrapper {
+                transform: translate(-50%, -50%) scale(0.48);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="viewport-wrapper">
+    <!-- 상단 아케이드 헤더 스코어보드 -->
+    <div id="scoreboard">
+        <div class="score-cell p1-score">1P SCORE<span id="txt-p1-score" class="score-val">000000</span></div>
+        <div class="score-cell high-score">HIGH SCORE<span id="txt-high-score" class="score-val">050000</span></div>
+        <div class="score-cell stage-display">STAGE<span id="txt-stage-val" class="score-val">01 / 30</span></div>
+    </div>
+
+    <!-- 메인 해상도 캐비닛 컨테이너 -->
+    <div id="game-container">
+        <canvas id="coreCanvas" width="640" height="440"></canvas>
+    </div>
+
+    <!-- 가상 터치 제어 레이아웃 -->
+    <div id="touch-controller-pad">
+        <div class="control-group left-group">
+            <div class="t-btn" id="t-left">◀</div>
+            <div class="t-btn" id="t-right">▶</div>
+        </div>
+        <div class="control-group right-group">
+            <div class="t-btn" id="t-shoot">SHT</div>
+            <div class="t-btn" id="t-jump">JMP</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// 1. 코어 하드웨어 시스템 인프라 및 상태머신 정의
+// ============================================================================
+const canvas = document.getElementById('coreCanvas');
+const ctx = canvas.getContext('2d');
+
+const TILE_SIZE = 20;
+const COLS = 32;
+const ROWS = 22;
+
+let score = 0;
+let highScore = 50000;
+let currentLevel = 1;
+const MAX_LEVELS = 30;
+
+let gameState = 'TITLE'; // TITLE, LEVEL_INTRO, PLAYING, LEVEL_CLEAR, GAME_OVER
+let stateTimer = 0;
+let bonusThresholdCount = 0; // 10000점 단위 보너스 체크용 스택 벨트
+
+const inputs = { left: false, right: false, jump: false, shoot: false };
+
+// ============================================================================
+// 2. 고해상도 웹 오디오 엔진 (합성 비프음 & 순수 칩튠 시퀀서 자동 재생 시스템)
+// ============================================================================
+let audioCtx = null;
+let bgmIntervalId = null;
+let bgmStep = 0;
+
+function initAudioEngine() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        startBGMSequencer();
+    }
+}
+
+// 사운드 이펙트 신시사이저 매트릭스
+function triggerSFX(preset) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    if (preset === 'shoot') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(580, now);
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.12);
+        gainNode.gain.setValueAtTime(0.25, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now); osc.stop(now + 0.12);
+    } else if (preset === 'jump') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+        gainNode.gain.setValueAtTime(0.2, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
+    } else if (preset === 'trap') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(350, now);
+        osc.frequency.setValueAtTime(500, now + 0.04);
+        gainNode.gain.setValueAtTime(0.15, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now); osc.stop(now + 0.08);
+    } else if (preset === 'pop') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(900, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.18);
+        gainNode.gain.setValueAtTime(0.35, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.18);
+        osc.start(now); osc.stop(now + 0.18);
+    } else if (preset === 'item') {
+        osc.type = 'square';
+        // 아르페지오 코드음 연출
+        const sequence = [523.25, 659.25, 783.99, 1046.50];
+        sequence.forEach((freq, idx) => {
+            const toneOsc = audioCtx.createOscillator();
+            const toneGain = audioCtx.createGain();
+            toneOsc.type = 'square';
+            toneOsc.frequency.setValueAtTime(freq, now + (idx * 0.05));
+            toneGain.gain.setValueAtTime(0.15, now + (idx * 0.05));
+            toneGain.gain.linearRampToValueAtTime(0.001, now + (idx * 0.05) + 0.08);
+            toneOsc.connect(toneGain);
+            toneGain.connect(audioCtx.destination);
+            toneOsc.start(now + (idx * 0.05));
+            toneOsc.stop(now + (idx * 0.05) + 0.08);
+        });
+    } else if (preset === 'bonus') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(880, now + 0.1);
+        osc.frequency.setValueAtTime(1760, now + 0.2);
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
+    }
+}
+
+// 오리지널 버블보블 중독성 테마 멜로디 시퀀서 루프 엔진
+function startBGMSequencer() {
+    // 음계 정의 주파수 매핑 매트릭스
+    const C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00, B4 = 493.88, C5 = 523.25;
+    const melody = [
+        C4, E4, G4, C4, E4, G4, C5, 0, G4, 0, E4, 0, C4, D4, E4, F4,
+        D4, F4, A4, D4, F4, A4, B4, 0, A4, 0, F4, 0, D4, E4, F4, G4,
+        E4, G4, C5, E4, G4, C5, E4, 0, C5, 0, G4, 0, E4, F4, G4, A4,
+        G4, F4, E4, D4, C4, 0, C4, 0, C4, 0, 0, 0, 0, 0, 0, 0
+    ];
+
+    bgmIntervalId = setInterval(() => {
+        if (gameState !== 'PLAYING' || !audioCtx) return;
+        
+        const note = melody[bgmStep % melody.length];
+        if (note > 0) {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            // 귀여운 트라이앵글 베이스 리듬 가미
+            osc.type = (bgmStep % 2 === 0) ? 'triangle' : 'sine';
+            osc.frequency.setValueAtTime(note, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.14);
+        }
+        bgmStep++;
+    }, 130); // 템포 설정 (BPM 동기화 가속 모듈)
+}
+
+// ============================================================================
+// 3. 알고리즘 기반 30단계 무한 절차적 스테이지 제네레이터
+// ============================================================================
+let mapGrid = [];
+
+function generateStageLayout(lvl) {
+    mapGrid = [];
+    // 1. 외곽 청사진 초기화
+    for (let r = 0; r < ROWS; r++) {
+        mapGrid[r] = [];
+        for (let c = 0; c < COLS; c++) {
+            if (c === 0 || c === COLS - 1) {
+                mapGrid[r][c] = 1; // 좌우 기둥벽
+            } else if (r === 0 || r === ROWS - 1) {
+                // 천장 및 하단 바닥 통과 구간 (중앙 오픈 기믹)
+                if (c >= 12 && c <= 19) mapGrid[r][c] = 0;
+                else mapGrid[r][c] = 1;
+            } else {
+                mapGrid[r][c] = 0;
+            }
+        }
+    }
+
+    // 2. 난이도 단계별 플랫폼 자동 분기 배치 수학공식
+    const patternType = lvl % 5;
+    if (patternType === 1) {
+        // 전통 3단 일자형 대칭형 레이아웃
+        buildPlatformRow(5, 4, 27, 2);
+        buildPlatformRow(10, 8, 23, 2);
+        buildPlatformRow(15, 4, 27, 2);
+    } else if (patternType === 2) {
+        // 중앙 집중형 크로스 아일랜드 레이아웃
+        buildPlatformRow(6, 10, 21, 2);
+        buildPlatformRow(11, 4, 12, 2);
+        buildPlatformRow(11, 19, 27, 2);
+        buildPlatformRow(16, 8, 23, 2);
+    } else if (patternType === 3) {
+        // 엇갈린 지그재그 격자형 챌린지 계단
+        buildPlatformRow(5, 2, 14, 2);
+        buildPlatformRow(9, 17, 29, 2);
+        buildPlatformRow(13, 2, 14, 2);
+        buildPlatformRow(17, 17, 29, 2);
+    } else if (patternType === 4) {
+        // 복합 스플릿 나선 동굴 미로
+        buildPlatformRow(6, 4, 27, 1); // 중간 벽돌 배리어 추가
+        buildPlatformRow(10, 2, 13, 2);
+        buildPlatformRow(10, 18, 29, 2);
+        buildPlatformRow(15, 7, 24, 2);
+    } else {
+        // 원작 1스테이지 모마주 기본 핑퐁 패턴
+        buildPlatformRow(5, 4, 27, 1);
+        buildPlatformRow(9, 6, 25, 2);
+        buildPlatformRow(13, 4, 13, 2);
+        buildPlatformRow(13, 18, 27, 2);
+        buildPlatformRow(17, 6, 25, 2);
+    }
+}
+
+function buildPlatformRow(row, colStart, colEnd, type) {
+    for (let c = colStart; c <= colEnd; c++) {
+        if (row >= 0 && row < ROWS && c >= 0 && c < COLS) {
+            mapGrid[row][c] = type;
+        }
+    }
+}
+
+function checkWorldTile(x, y) {
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return 0;
+    return mapGrid[ty][tx];
+}
+
+// ============================================================================
+// 4. 고도화된 캐릭터 물리 및 애니메이션 그래픽스 시스템
+// ============================================================================
+class Player {
+    constructor() {
+        this.reset();
+        this.width = 24;
+        this.height = 24;
+        this.animFrame = 0;
+    }
+    reset() {
+        this.x = 60;
+        this.y = 340;
+        this.vx = 0;
+        this.vy = 0;
+        this.dir = 1;
+        this.isOnGround = false;
+        this.shootCooldown = 0;
+    }
+    update() {
+        this.animFrame++;
+        // 컨트롤 디스패치 물리화
+        if (inputs.left) { this.vx = -3.4; this.dir = -1; }
+        else if (inputs.right) { this.vx = 3.4; this.dir = 1; }
+        else { this.vx *= 0.82; }
+
+        this.vy += 0.38; // 중력 적용선
+
+        if (inputs.jump && this.isOnGround) {
+            this.vy = -9.2;
+            this.isOnGround = false;
+            triggerSFX('jump');
+        }
+
+        // X, Y 이동축 검사 루틴 및 좌표 피드백
+        this.x += this.vx;
+        if (this.x < TILE_SIZE) this.x = TILE_SIZE;
+        if (this.x + this.width > canvas.width - TILE_SIZE) this.x = canvas.width - TILE_SIZE - this.width;
+
+        this.y += this.vy;
+        this.handleYCollisions();
+
+        // 맵 상하 무한게이트 연결성 트랜스레이션
+        if (this.y > canvas.height) { this.y = -this.height; this.isOnGround = false; }
+        else if (this.y < -this.height) { this.y = canvas.height; }
+
+        // 거품 공격 트리거 제어부
+        if (this.shootCooldown > 0) this.shootCooldown--;
+        if (inputs.shoot && this.shootCooldown === 0) {
+            activeBubbles.push(new Bubble(this.x + (this.dir === 1 ? 20 : -12), this.y + 4, this.dir));
+            this.shootCooldown = 18;
+            triggerSFX('shoot');
+        }
+    }
+    handleYCollisions() {
+        this.isOnGround = false;
+        if (this.vy < 0) return; // 상승 도중 관통 허용
+
+        const leftX = this.x + 4;
+        const rightX = this.x + this.width - 4;
+        const footY = this.y + this.height;
+
+        const tileL = checkWorldTile(leftX, footY);
+        const tileR = checkWorldTile(rightX, footY);
+
+        if (tileL > 0 || tileR > 0) {
+            const snapY = Math.floor(footY / TILE_SIZE) * TILE_SIZE;
+            if (footY - this.vy <= snapY + 5) {
+                this.y = snapY - this.height;
+                this.vy = 0;
+                this.isOnGround = true;
+            }
+        }
+    }
+    draw() {
+        // 고해상도 아기공룡 버블룬 백터 그래픽 디테일 묘사
+        ctx.save();
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(0, 255, 150, 0.5)";
+        
+        // 메인 바디 구체
+        ctx.fillStyle = '#00ff66';
+        ctx.beginPath();
+        ctx.arc(this.x + 12, this.y + 12, 11, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 달리기 발 애니메이션 프레임 동적 렌더링
+        ctx.fillStyle = '#ffffff';
+        const walkCycle = Math.floor(this.animFrame / 6) % 2;
+        if (walkCycle === 0) {
+            ctx.fillRect(this.x + 4, this.y + 22, 5, 3);
+            ctx.fillRect(this.x + 14, this.y + 22, 5, 3);
+        } else {
+            ctx.fillRect(this.x + 6, this.y + 22, 5, 3);
+            ctx.fillRect(this.x + 16, this.y + 22, 5, 3);
+        }
+
+        // 공룡 배주머니 (귀여운 노란색 아치 구조)
+        ctx.fillStyle = '#ffff44';
+        ctx.beginPath();
+        ctx.arc(this.x + (this.dir === 1 ? 17 : 7), this.y + 15, 6, 0, Math.PI, false);
+        ctx.fill();
+
+        // 오락실 감성 큰 눈망울 표현
+        ctx.fillStyle = '#ffffff';
+        const eyeX = this.dir === 1 ? this.x + 14 : this.x + 4;
+        ctx.fillRect(eyeX, this.y + 4, 6, 8);
+        ctx.fillStyle = '#1111aa';
+        const pupilX = this.dir === 1 ? this.x + 18 : this.x + 4;
+        ctx.fillRect(pupilX, this.y + 6, 2, 4);
+
+        // 등지느러미 피라미드 주황 뿔 액센트
+        ctx.fillStyle = '#ff4400';
+        const spineX = this.dir === 1 ? this.x : this.x + 20;
+        ctx.fillRect(spineX, this.y + 3, 4, 4);
+        ctx.fillRect(spineX, this.y + 10, 4, 4);
+        ctx.fillRect(spineX, this.y + 17, 4, 4);
+
+        ctx.restore();
+    }
+}
+
+// ============================================================================
+// 5. 다채로운 다중 성격형 몬스터 군집 엔진 인공지능
+// ============================================================================
+class Enemy {
+    constructor(x, y, variantType) {
+        this.x = x;
+        this.y = y;
+        this.variant = variantType; // 'ZenChan', 'Mighta', 'Banebou'
+        this.width = 20;
+        this.height = 20;
+        this.isTrapped = false;
+        this.trapTimer = 0;
+        this.vy = 0;
+        this.animTick = Math.random() * 100;
+
+        // 변종 난이도별 기틀 능력치 부여 스케일러
+        if (variantType === 'Mighta') {
+            this.speed = 1.8 + (currentLevel * 0.02); // 스테이지 진행 비례 가속
+            this.color = '#ff4400'; // 주황 불타는 개체
+        } else if (variantType === 'Banebou') {
+            this.speed = 1.2;
+            this.color = '#ffff00'; // 쉬지않고 날뛰는 노란 개체
+        } else {
+            this.speed = 1.3 + (currentLevel * 0.01);
+            this.color = '#cc00cc'; // 기본 정통파 보라색 개체
+        }
+        this.vx = Math.random() > 0.5 ? this.speed : -this.speed;
+    }
+    update() {
+        this.animTick++;
+        if (this.isTrapped) {
+            this.trapTimer++;
+            // 약 8초 동안 플레이어가 안터치하면 폭주 분노 모드로 버블 자가 파괴 탈출
+            if (this.trapTimer > 480) {
+                this.isTrapped = false;
+                this.trapTimer = 0;
+                this.speed *= 1.6; // 폭주 가속
+                this.vx = this.vx > 0 ? this.speed : -this.speed;
+                this.color = '#ff0000'; // 분노의 붉은색 강제 치환
+            }
+            return;
+        }
+
+        this.vy += 0.35;
+        this.x += this.vx;
+
+        // 벽 반사 제어부
+        if (this.x < TILE_SIZE || this.x + this.width > canvas.width - TILE_SIZE) {
+            this.vx *= -1;
+            this.x = this.x < TILE_SIZE ? TILE_SIZE + 1 : canvas.width - TILE_SIZE - this.width - 1;
+        }
+
+        // 특성 인공지능 패턴 주입 루프
+        if (this.variant === 'Banebou') {
+            // 바네보는 무조건 바닥 접지 시 강력 리바운드 도약 실행
+            if (this.vy === 0 && Math.random() < 0.4) this.vy = -8.5;
+        } else {
+            // 일반 개체는 낮은 확률로 위층 추적용 유동형 무작위 점프 가동
+            if (Math.random() < 0.008) this.vy = -7.5;
+        }
+
+        this.y += this.vy;
+        this.handleYCollisions();
+
+        if (this.y > canvas.height) this.y = -this.height;
+    }
+    handleYCollisions() {
+        const midX = this.x + this.width / 2;
+        const footY = this.y + this.height;
+        const tile = checkWorldTile(midX, footY);
+        if (this.vy >= 0 && (tile === 1 || tile === 2)) {
+            const snapY = Math.floor(footY / TILE_SIZE) * TILE_SIZE;
+            if (footY - this.vy <= snapY + 5) {
+                this.y = snapY - this.height;
+                this.vy = 0;
+            }
+        }
+    }
+    draw() {
+        ctx.save();
+        if (this.isTrapped) {
+            // 버블화 상태 점멸 렌더 페이즈
+            ctx.fillStyle = Math.floor(this.animTick / 10) % 2 === 0 ? '#ff88ff' : '#00ffff';
+            ctx.beginPath();
+            ctx.arc(this.x + 10, this.y + 10, 13, 0, Math.PI * 2);
+            ctx.fill();
+            // 가둬진 눈동자 원경 처리
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(this.x + 6, this.y + 6, 2, 5);
+            ctx.fillRect(this.x + 12, this.y + 6, 2, 5);
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            // 눈가 및 아케이드 스프라이트 화소 디테일 보완
+            ctx.fillStyle = '#ffffff';
+            const lookOffset = this.vx > 0 ? 12 : 2;
+            ctx.fillRect(this.x + lookOffset, this.y + 4, 6, 6);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(this.x + lookOffset + (this.vx > 0 ? 4 : 0), this.y + 6, 2, 2);
+            
+            // 바네보 고유 태엽/스프링 다리 시각화 요소 가미
+            if (this.variant === 'Banebou') {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.x + 4, this.y + 20);
+                ctx.lineTo(this.x + 10, this.y + 25);
+                ctx.lineTo(this.x + 16, this.y + 20);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
+}
+
+// ============================================================================
+// 6. 거품 발사체 물리학 및 사인파 가중 부력 제어
+// ============================================================================
+class Bubble {
+    constructor(x, y, dir) {
+        this.x = x;
+        this.y = y;
+        this.dir = dir;
+        this.vx = dir * 8.5; // 발사 초기 탄속 가속도
+        this.life = 0;
+        this.state = 'shoot'; // 'shoot' -> 'float'
+    }
+    update() {
+        this.life++;
+        if (this.state === 'shoot') {
+            this.x += this.vx;
+            this.vx *= 0.84; // 수평 감쇄 마찰 법칙 적용
+            if (Math.abs(this.vx) < 0.4) this.state = 'float';
+
+            // 직진 비행 구간 내 유효 타격 트랩 판정 매트릭스 연동
+            activeEnemies.forEach(e => {
+                if (!e.isTrapped && Math.abs(this.x - (e.x + 10)) < 22 && Math.abs(this.y - (e.y + 10)) < 22) {
+                    e.isTrapped = true;
+                    e.trapTimer = 0;
+                    this.life = 9999; // 타격된 오리지널 거품은 즉시 마킹 소멸 유도
+                    triggerSFX('trap');
+                }
+            });
+        } else {
+            // 부력 상승기 및 미세 파동 물리 변조공식 적용
+            this.y -= 0.75;
+            this.x += Math.sin(this.life * 0.08) * 1.3;
+            if (this.y < 30) this.y = 30; // 천장 헤드룸 고정 고리
+        }
+    }
+    draw() {
+        if (this.life > 9000) return;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 220, 255, 0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 9, 0, Math.PI * 2);
+        ctx.stroke();
+        // 맺힌 반사광 아크 라이팅 포인트 효과
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(this.x - 4, this.y - 4, 2, 2);
+        ctx.restore();
+    }
+}
+
+// ============================================================================
+// 7. 유동성 미끄러짐 물리 효과가 내장된 후속 아이템 체인
+// ============================================================================
+class RewardItem {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vy = 0;
+        this.slideDir = Math.random() > 0.5 ? 1 : -1;
+        this.life = 0;
+        this.isGrounded = false;
+        
+        // 스테이지 레벨에 따른 과일 등급 해금 텍스처 컬러링 스위칭 구조
+        const r = Math.random();
+        if (r < 0.2) { this.scoreValue = 700; this.color = '#ff3333'; this.label = 'CHERRY'; }
+        else if (r < 0.5) { this.scoreValue = 1000; this.color = '#ffff33'; this.label = 'BANANA'; }
+        else { this.scoreValue = 500; this.color = '#ff55aa'; this.label = 'PEACH'; }
+    }
+    update() {
+        this.life++;
+        this.vy += 0.3;
+        this.y += this.vy;
+
+        const midX = this.x + 8;
+        const footY = this.y + 16;
+        const tile = checkWorldTile(midX, footY);
+
+        if (this.vy >= 0 && (tile === 1 || tile === 2)) {
+            const snapY = Math.floor(footY / TILE_SIZE) * TILE_SIZE;
+            this.y = snapY - 16;
+            this.vy = 0;
+            this.isGrounded = true;
+        } else {
+            this.isGrounded = false;
+        }
+
+        // 보글보글 고유 기믹: 아이템이 바닥면을 타고 스르륵 슬라이딩 무브 수행
+        if (this.isGrounded) {
+            this.x += this.slideDir * 0.8;
+            if (this.x < TILE_SIZE || this.x > canvas.width - TILE_SIZE - 16) this.slideDir *= -1;
+        }
+    }
+    draw() {
+        if (this.life > 500 && Math.floor(this.life / 8) % 2 === 0) return; // 소멸 전 깜빡임 기능
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x + 8, this.y + 9, 7, 0, Math.PI * 2);
+        ctx.fill();
+        // 과일 꼭지 이파리 녹색 데코레이션 그리기
+        ctx.strokeStyle = '#33cc33';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x + 8, this.y + 3);
+        ctx.lineTo(this.x + 11, this.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// 파티클 스파크 연출 이펙트 구조체
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y; this.color = color;
+        this.vx = (Math.random() - 0.5) * 6;
+        this.vy = (Math.random() - 0.5) * 6;
+        this.alpha = 1.0;
+    }
+    update() { this.x += this.vx; this.y += this.vy; this.alpha -= 0.04; }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, 3, 3);
+        ctx.restore();
+    }
+}
+
+// ============================================================================
+// 8. 전역 엔티티 매니지먼트 풀 및 충돌 분석 매트릭스 루프
+// ============================================================================
+let playerInstance = new Player();
+let activeBubbles = [];
+let activeEnemies = [];
+let activeItems = [];
+let activeParticles = [];
+
+function setupStageEntities(lvl) {
+    activeBubbles = [];
+    activeEnemies = [];
+    activeItems = [];
+    activeParticles = [];
+    playerInstance.reset();
+
+    generateStageLayout(lvl);
+
+    // 레벨에 따른 적 수량 가중치 산출 및 하이브리드 변종 스폰 배치 공식
+    const baseCount = 3 + Math.floor(lvl / 4);
+    const enemyCount = Math.min(baseCount, 8); // 최대 한스테이지 8마리 조율
+
+    for (let i = 0; i < enemyCount; i++) {
+        let spawnedVariant = 'ZenChan';
+        if (lvl >= 3 && i % 3 === 1) spawnedVariant = 'Mighta';
+        if (lvl >= 6 && i % 3 === 2) spawnedVariant = 'Banebou';
+        
+        // 층층별 분산 배치 기하학 좌표 연산
+        const targetX = 80 + (i * 65);
+        const targetY = 60 + ((i % 3) * 100);
+        activeEnemies.push(new Enemy(targetX, targetY, spawnedVariant));
+    }
+}
+
+function resolveGameCollisions() {
+    // 1. 플레이어 몸체와 둥실 버블 간 연쇄 충돌 감지 피드백선
+    for (let bIdx = activeBubbles.length - 1; bIdx >= 0; bIdx--) {
+        const bub = activeBubbles[bIdx];
+        if (bub.state === 'float') {
+            const pCenterX = playerInstance.x + 12;
+            const pCenterY = playerInstance.y + 12;
+            const dist = Math.hypot(pCenterX - bub.x, pCenterY - bub.y);
+            if (dist < 23) {
+                // 일반 거품 터뜨리기 (소량 파편 연출)
+                createBurstParticles(bub.x, bub.y, '#00ffff');
+                activeBubbles.splice(bIdx, 1);
+                updateScore(10);
+                triggerSFX('pop');
+            }
+        }
+    }
+
+    // 2. 플레이어 몸체와 갇힌 적 팝 연쇄 폭발 사슬 분석계
+    for (let eIdx = activeEnemies.length - 1; eIdx >= 0; eIdx--) {
+        const en = activeEnemies[eIdx];
+        if (en.isTrapped) {
+            const pCenterX = playerInstance.x + 12;
+            const pCenterY = playerInstance.y + 12;
+            const dist = Math.hypot(pCenterX - (en.x + 10), pCenterY - (en.y + 10));
+            if (dist < 26) {
+                // 대형 폭발 스파크 방출 및 적 제거 후 전리품 스폰 드롭
+                createBurstParticles(en.x + 10, en.y + 10, '#ff00ff', 15);
+                activeItems.push(new RewardItem(en.x, en.y));
+                activeEnemies.splice(eIdx, 1);
+                updateScore(1000);
+                triggerSFX('pop');
+            }
+        } else {
+            // 살아 움직이는 치명적 적 군체와 플레이어 충돌 시 사망 대용 하드 패널티 리셋
+            const pCenterX = playerInstance.x + 12;
+            const pCenterY = playerInstance.y + 12;
+            const dist = Math.hypot(pCenterX - (en.x + 10), pCenterY - (en.y + 10));
+            if (dist < 18) {
+                createBurstParticles(playerInstance.x + 12, playerInstance.y + 12, '#ff4444', 25);
+                playerInstance.reset(); // 목숨 감소 대체 기지 포지션 리셋
+                updateScore(-500); // 패널티 스코어 삭감 조치
+            }
+        }
+    }
+
+    // 3. 과일 전리품 파밍 수집 조건 루프
+    for (let iIdx = activeItems.length - 1; iIdx >= 0; iIdx--) {
+        const item = activeItems[iIdx];
+        if (Math.abs((playerInstance.x + 12) - (item.x + 8)) < 18 && Math.abs((playerInstance.y + 12) - (item.y + 8)) < 18) {
+            updateScore(item.scoreValue);
+            createBurstParticles(item.x + 8, item.y + 8, '#ffff44', 8);
+            activeItems.splice(iIdx, 1);
+            triggerSFX('item');
+        }
+    }
+}
+
+function createBurstParticles(x, y, color, qty = 6) {
+    for (let i = 0; i < qty; i++) {
+        activeParticles.push(new Particle(x, y, color));
+    }
+}
+
+function updateScore(amount) {
+    score += amount;
+    if (score < 0) score = 0;
+    
+    if (score > highScore) {
+        highScore = score;
+        document.getElementById('txt-high-score').innerText = String(highScore).padStart(6, '0');
+    }
+    document.getElementById('txt-p1-score').innerText = String(score).padStart(6, '0');
+
+    // 4. 요청 하이라이트: 일정 점수(10000점 단위 누적) 도달 시 보너스 라이프 격 보너스 점수 지급 이벤트 엔진
+    const currentStack = Math.floor(score / 10000);
+    if (currentStack > bonusThresholdCount) {
+        bonusThresholdCount = currentStack;
+        score += 3000; // 대형 보너스 점수 즉시 지급 밸트 연결
+        triggerSFX('bonus');
+        // 오버레이 점수 즉각 리비전 갱신
+        document.getElementById('txt-p1-score').innerText = String(score).padStart(6, '0');
+    }
+}
+
+function drawWorldGrid() {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const tile = mapGrid[r][c];
+            if (tile === 1) {
+                // 네온 블루 외곽 성벽 캐비닛 비주얼
+                ctx.fillStyle = '#1111aa';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.strokeStyle = '#3344ff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(c * TILE_SIZE + 1, r * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+            } else if (tile === 2) {
+                // 오렌지 빛깔 아케이드 점프스루 플랫폼 난간 구조
+                ctx.fillStyle = '#ffaa00';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, 6);
+                ctx.fillStyle = '#884400';
+                ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE + 6, TILE_SIZE, 2);
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 9. 하이브리드 입력 인터페이스 엔진 구축 (PC 키보드 & iOS 사파리 다이렉트 바인딩)
+// ============================================================================
+window.addEventListener('keydown', e => {
+    initAudioEngine();
+    if (gameState !== 'PLAYING') return;
+    if (e.key === 'ArrowLeft' || e.key === 'a') inputs.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd') inputs.right = true;
+    if (e.key === 'ArrowUp' || e.key === 'w') inputs.jump = true;
+    if (e.key === 'x' || e.key === ' ') inputs.shoot = true;
+});
+
+window.addEventListener('keyup', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') inputs.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') inputs.right = false;
+    if (e.key === 'ArrowUp' || e.key === 'w') inputs.jump = false;
+    if (e.key === 'x' || e.key === ' ') inputs.shoot = false;
+});
+
+// 아이폰 사파리 더블탭 확대 줌 피하고 완벽 고해상도 조작 매핑 유도부 인터셉터
+function bindVirtualTouchKey(elementId, actionKey) {
+    const btn = document.getElementById(elementId);
+    
+    btn.addEventListener('touchstart', e => {
+        e.preventDefault();
+        initAudioEngine();
+        inputs[actionKey] = true;
+    }, { passive: false });
+    
+    btn.addEventListener('touchend', e => {
+        e.preventDefault();
+        inputs[actionKey] = false;
+    }, { passive: false });
+}
+
+bindVirtualTouchKey('t-left', 'left');
+bindVirtualTouchKey('t-right', 'right');
+bindVirtualTouchKey('t-jump', 'jump');
+bindVirtualTouchKey('t-shoot', 'shoot');
+
+// ============================================================================
+// 10. 메인 중앙 제어 게임 루프 파이프라인 엔진
+// ============================================================================
+function masterGameLoop() {
+    stateTimer++;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (gameState === 'TITLE') {
+        // 타이틀 복고풍 렌더링 화면
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 32px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText("BUBBLE BOBBLE", 320, 150);
+        ctx.fillText("RETRO CORE", 320, 200);
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = '16px "Courier New", monospace';
+        const blink = Math.floor(stateTimer / 25) % 2 === 0;
+        if (blink) {
+            ctx.fillText("TAP SCREEN OR PRESS ANY KEY", 320, 290);
+            ctx.fillText("TO COIN IN & CHALLENGE 30 STAGES", 320, 320);
+        }
+        
+        ctx.fillStyle = '#888888';
+        ctx.font = '12px sans-serif';
+        ctx.fillText("PC: Arrow Keys / A,D,W & X, Space | iOS: Touch Virtual Pad", 320, 400);
+    } 
+    
+    else if (gameState === 'LEVEL_INTRO') {
+        // 판 시작 전 원작 감성 레벨 트랜지션 타이틀 스크린 기믹
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 28px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`STAGE ${String(currentLevel).padStart(2, '0')}`, 320, 200);
+        
+        ctx.fillStyle = '#00ff66';
+        ctx.font = '16px "Courier New", monospace';
+        ctx.fillText("READY!", 320, 250);
+
+        if (stateTimer > 90) { // 약 1.5초 대기 연출 후 진입
+            gameState = 'PLAYING';
+            stateTimer = 0;
+        }
+    } 
+    
+    else if (gameState === 'PLAYING') {
+        // 엔티티 업데이트 사이클
+        playerInstance.update();
+        activeBubbles.forEach(b => b.update());
+        activeEnemies.forEach(e => e.update());
+        activeItems.forEach(i => i.update());
+        activeParticles.forEach(p => p.update());
+
+        // 충돌 중재 및 필터 어셈블리 풀링
+        resolveGameCollisions();
+        activeBubbles = activeBubbles.filter(b => b.life < 1000 && b.y > 0);
+        activeParticles = activeParticles.filter(p => p.alpha > 0);
+
+        // 월드 드로잉 페이즈
+        drawWorldGrid();
+        activeItems.forEach(i => i.draw());
+        activeBubbles.forEach(b => b.draw());
+        activeEnemies.forEach(e => e.draw());
+        playerInstance.draw();
+        activeParticles.forEach(p => p.draw());
+
+        // 스테이지 올클리어 승리 조건 체크 (모든 적 소멸 시)
+        if (activeEnemies.length === 0) {
+            if (currentLevel >= MAX_LEVELS) {
+                gameState = 'GAME_OVER';
+                stateTimer = 0;
+            } else {
+                gameState = 'LEVEL_CLEAR';
+                stateTimer = 0;
+            }
+        }
+    } 
+    
+    else if (gameState === 'LEVEL_CLEAR') {
+        // 레벨이 끝나면 타이틀이 나오는 완벽 트랜지션 연출
+        drawWorldGrid();
+        playerInstance.draw();
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 30px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`STAGE ${currentLevel} CLEAR!`, 320, 180);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px monospace';
+        ctx.fillText("BONUS POINTS SCORING...", 320, 230);
+
+        if (stateTimer > 120) {
+            currentLevel++;
+            document.getElementById('txt-stage-val').innerText = `${String(currentLevel).padStart(2, '0')} / 30`;
+            setupStageEntities(currentLevel);
+            gameState = 'LEVEL_INTRO';
+            stateTimer = 0;
+        }
+    } 
+    
+    else if (gameState === 'GAME_OVER') {
+        // 최종 엔딩 혹은 게임오버 화면 처리선
+        ctx.fillStyle = '#ff3333';
+        ctx.font = 'bold 36px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        if (currentLevel >= MAX_LEVELS) {
+            ctx.fillStyle = '#00ffcc';
+            ctx.fillText("ALL 30 STAGES CLEARED!", 320, 160);
+            ctx.fillText("YOU ARE THE ARCADE KING!", 320, 210);
+        } else {
+            ctx.fillText("GAME OVER", 320, 200);
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '18px monospace';
+        ctx.fillText(`FINAL SCORE: ${String(score).padStart(6, '0')}`, 320, 280);
+        ctx.font = '14px monospace';
+        ctx.fillText("TAP TO RETURN TO MAIN TITLE", 320, 340);
+    }
+
+    requestAnimationFrame(masterGameLoop);
+}
+
+// 타이틀 터치/클릭 기동 액터 전선
+canvas.addEventListener('click', () => {
+    initAudioEngine();
+    if (gameState === 'TITLE') {
+        score = 0;
+        currentLevel = 1;
+        bonusThresholdCount = 0;
+        document.getElementById('txt-p1-score').innerText = "000000";
+        document.getElementById('txt-stage-val').innerText = "01 / 30";
+        setupStageEntities(currentLevel);
+        gameState = 'LEVEL_INTRO';
+        stateTimer = 0;
+    } else if (gameState === 'GAME_OVER') {
+        gameState = 'TITLE';
+        stateTimer = 0;
+    }
+});
+
+// 엔진 구동 실행 시작선
+masterGameLoop();
+</script>
+</body>
+</html>
