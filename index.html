@@ -3,16 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Bubble Bobble Arcade Ultimate Edition</title>
-
+    <title>Bubble Bobble Arcade - Hybrid Responsive Edition</title>
     <!-- iOS 홈 화면 추가(PWA) 지원 메타 태그 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="B.Bobble">
      <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-
-    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KICA8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzAyMDIwOCIvPgogIDwhLS0g65OxIOu/lCAtLT4KICA8cG9seWdvbiBwb2ludHM9IjQwLDUwIDcwLDcwIDUwLDkwIiBmaWxsPSIjZmY0NDAwIi8+CiAgPHBvbHlnb24gcG9pbnRzPSIyMCw5MCA1MCwxMTAgMzAsMTMwIiBmaWxsPSIjZmY0NDAwIi8+CiAgPHBvbHlnb24gcG9pbnRzPSIxMCwxMzAgNDAsMTUwIDIwLDE3MCIgZmlsbD0iI2ZmNDQwMCIvPgogIAogIDwhLS0g66q47LK0IC0tPgogIDxjaXJjbGUgY3g9IjExMCIgY3k9IjExMCIgcj0iNzAiIGZpbGw9IiMwMGZmNjYiLz4KICAKICA8IS0tIOuwsCAtLT4KICA8cGF0aCBkPSJNIDgwIDE4MCBRIDExMCAxMzAgMTQwIDE4MCBaIiBmaWxsPSIjZmZmZjQ0Ii8+CiAgCiAgPCEtLSDriIggLS0+CiAgPHJlY3QgeD0iMTMwIiB5PSI2MCIgd2lkdGg9IjMwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjZmZmZmZmIi8+CiAgPHJlY3QgeD0iMTQ1IiB5PSI3MCIgd2lkdGg9IjE1IiBoZWlnaHQ9IjIwIiBmaWxsPSIjMTExMWFhIi8+Cjwvc3ZnPg==">
 
     <style>
         * {
@@ -30,117 +27,166 @@
             overflow: hidden;
             width: 100vw;
             height: 100vh;
-            position: fixed;
-        }
-        #viewport-wrapper {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 640px;
-            height: 580px;
-            display: block;
-        }
-        #game-container {
-            position: relative;
-            width: 640px;
-            height: 440px;
-            background-color: #000000;
-            border: 4px solid #222244;
-            box-shadow: 0 0 30px rgba(0, 100, 255, 0.4);
-        }
-        canvas {
-            display: block;
-            image-rendering: pixelated;
-            background-color: #000;
-            width: 100%;
-            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         
-        /* 상단 전광판 UI 스타일 */
+        /* 전체적인 게임+스코어 보드 감싸는 래퍼 */
+        #game-frame {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 640px;
+            position: relative;
+        }
+
         #scoreboard {
             width: 100%;
             height: 45px;
             background: #050510;
             display: table;
-            border-bottom: 2px solid #222244;
+            border: 2px solid #222244;
+            border-bottom: none;
             padding: 2px 10px;
         }
         .score-cell {
             display: table-cell;
             vertical-align: middle;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             letter-spacing: 1px;
         }
         .p1-score { text-align: left; color: #ff4444; }
         .high-score { text-align: center; color: #44ff44; }
         .stage-display { text-align: right; color: #ffff44; }
-        .score-val { font-size: 16px; color: #ffffff; display: block; margin-top: 2px; }
+        .score-val { font-size: 15px; color: #ffffff; display: block; margin-top: 2px; }
 
-        /* 모바일 통합 가상 패드 (A타입 최적화 레이아웃) */
+        #game-container {
+            width: 100%;
+            aspect-ratio: 640 / 440;
+            background-color: #000000;
+            border: 4px solid #222244;
+            box-shadow: 0 0 30px rgba(0, 100, 255, 0.4);
+            position: relative;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 가상 컨트롤러 패드 - 반응형 유연 레이아웃 */
         #touch-controller-pad {
             position: absolute;
-            bottom: -130px;
-            left: 0;
             width: 100%;
-            height: 110px;
-            display: block;
             pointer-events: none;
+            z-index: 10;
         }
         .control-group {
             position: absolute;
-            top: 10px;
-            height: 90px;
             pointer-events: auto;
+            display: flex;
+            gap: 15px;
         }
-        .left-group { left: 10px; width: 180px; }
-        .right-group { right: 10px; width: 180px; text-align: right; }
         
+        /* 대폭 확대된 버튼 스타일 (기존 76px -> 95px) */
         .t-btn {
-            display: inline-block;
-            width: 76px;
-            height: 76px;
-            background: rgba(20, 20, 40, 0.75);
-            border: 3px solid rgba(100, 150, 255, 0.4);
+            width: 95px;
+            height: 95px;
+            background: rgba(20, 20, 40, 0.85);
+            border: 4px solid rgba(100, 150, 255, 0.6);
             border-radius: 50%;
             color: #ffffff;
             font-weight: bold;
-            font-size: 20px;
+            font-size: 26px;
             text-align: center;
-            line-height: 70px;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.6);
-            margin: 0 5px;
+            line-height: 87px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.7);
+            active-user-select: none;
         }
         .t-btn:active {
-            background: rgba(100, 150, 255, 0.6);
+            background: rgba(100, 150, 255, 0.8);
             border-color: #ffffff;
             color: #000000;
+            transform: scale(0.95);
         }
         #t-shoot {
-            background: rgba(255, 50, 50, 0.35);
-            border-color: rgba(255, 50, 50, 0.6);
+            background: rgba(255, 40, 40, 0.4);
+            border-color: rgba(255, 50, 50, 0.8);
         }
         #t-shoot:active {
-            background: rgba(255, 50, 50, 0.8);
+            background: rgba(255, 40, 40, 0.9);
         }
 
-        /* 반응형 스케일 다운 제어 (아이폰 및 저해상도 모바일 대응) */
-        @media (max-width: 660px) {
-            #viewport-wrapper {
-                transform: translate(-50%, -50%) scale(0.55);
+        /* ---------------------------------------------------
+         * [세로 모드 (Portrait) 레이아웃 스타일]
+         * --------------------------------------------------- */
+        @media (orientation: portrait) {
+            body {
+                padding-bottom: 40px;
             }
+            #game-frame {
+                width: 92vw;
+                margin-bottom: 20px;
+            }
+            #touch-controller-pad {
+                position: relative;
+                width: 92vw;
+                height: 120px;
+                margin-top: 15px;
+            }
+            .control-group {
+                top: 10px;
+            }
+            .left-group { left: 0; }
+            .right-group { right: 0; }
         }
-        @media (max-width: 400px) {
-            #viewport-wrapper {
-                transform: translate(-50%, -50%) scale(0.48);
+
+        /* ---------------------------------------------------
+         * [가로 모드 (Landscape) 양손 최적화 레이아웃 스타일]
+         * --------------------------------------------------- */
+        @media (orientation: landscape) {
+            #game-frame {
+                width: auto;
+                height: 92vh;
+                max-width: none;
+                aspect-ratio: 640 / 485; /* 스코어보드 높이 포함 */
+            }
+            /* 양쪽 구석으로 버튼 완벽 배치 (화면을 가리지 않음) */
+            #touch-controller-pad {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100vw;
+                height: 100vh;
+            }
+            .control-group {
+                bottom: 30px; /* 엄지손가락이 닿기 가장 편한 하단 위치 */
+            }
+            /* 가로모드에서는 버튼간 간격을 약간 벌려 안정적인 그립 유도 */
+            .left-group { 
+                left: calc(20px + env(safe-area-inset-left)); 
+                flex-direction: row;
+            }
+            .right-group { 
+                right: calc(20px + env(safe-area-inset-right)); 
+                flex-direction: row;
+            }
+            /* 노치 디자인 혹은 세이프 에어리어 대응 */
+            body {
+                padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
             }
         }
     </style>
 </head>
 <body>
 
-<div id="viewport-wrapper">
+<div id="game-frame">
     <!-- 상단 아케이드 헤더 스코어보드 -->
     <div id="scoreboard">
         <div class="score-cell p1-score">1P SCORE<span id="txt-p1-score" class="score-val">000000</span></div>
@@ -152,17 +198,17 @@
     <div id="game-container">
         <canvas id="coreCanvas" width="640" height="440"></canvas>
     </div>
+</div>
 
-    <!-- 가상 터치 제어 레이아웃 -->
-    <div id="touch-controller-pad">
-        <div class="control-group left-group">
-            <div class="t-btn" id="t-left">◀</div>
-            <div class="t-btn" id="t-right">▶</div>
-        </div>
-        <div class="control-group right-group">
-            <div class="t-btn" id="t-shoot">SHT</div>
-            <div class="t-btn" id="t-jump">JMP</div>
-        </div>
+<!-- 가상 터치 제어 레이아웃 -->
+<div id="touch-controller-pad">
+    <div class="control-group left-group">
+        <div class="t-btn" id="t-left">◀</div>
+        <div class="t-btn" id="t-right">▶</div>
+    </div>
+    <div class="control-group right-group">
+        <div class="t-btn" id="t-shoot">SHT</div>
+        <div class="t-btn" id="t-jump">JMP</div>
     </div>
 </div>
 
@@ -184,7 +230,7 @@ const MAX_LEVELS = 30;
 
 let gameState = 'TITLE'; // TITLE, LEVEL_INTRO, PLAYING, LEVEL_CLEAR, GAME_OVER
 let stateTimer = 0;
-let bonusThresholdCount = 0; // 10000점 단위 보너스 체크용 스택 벨트
+let bonusThresholdCount = 0;
 
 const inputs = { left: false, right: false, jump: false, shoot: false };
 
@@ -202,7 +248,6 @@ function initAudioEngine() {
     }
 }
 
-// 사운드 이펙트 신시사이저 매트릭스
 function triggerSFX(preset) {
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
@@ -241,7 +286,6 @@ function triggerSFX(preset) {
         osc.start(now); osc.stop(now + 0.18);
     } else if (preset === 'item') {
         osc.type = 'square';
-        // 아르페지오 코드음 연출
         const sequence = [523.25, 659.25, 783.99, 1046.50];
         sequence.forEach((freq, idx) => {
             const toneOsc = audioCtx.createOscillator();
@@ -266,9 +310,7 @@ function triggerSFX(preset) {
     }
 }
 
-// 오리지널 버블보블 중독성 테마 멜로디 시퀀서 루프 엔진
 function startBGMSequencer() {
-    // 음계 정의 주파수 매핑 매트릭스
     const C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00, B4 = 493.88, C5 = 523.25;
     const melody = [
         C4, E4, G4, C4, E4, G4, C5, 0, G4, 0, E4, 0, C4, D4, E4, F4,
@@ -287,7 +329,6 @@ function startBGMSequencer() {
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             
-            // 귀여운 트라이앵글 베이스 리듬 가미
             osc.type = (bgmStep % 2 === 0) ? 'triangle' : 'sine';
             osc.frequency.setValueAtTime(note, audioCtx.currentTime);
             gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
@@ -297,7 +338,7 @@ function startBGMSequencer() {
             osc.stop(audioCtx.currentTime + 0.14);
         }
         bgmStep++;
-    }, 130); // 템포 설정 (BPM 동기화 가속 모듈)
+    }, 130);
 }
 
 // ============================================================================
@@ -307,14 +348,12 @@ let mapGrid = [];
 
 function generateStageLayout(lvl) {
     mapGrid = [];
-    // 1. 외곽 청사진 초기화
     for (let r = 0; r < ROWS; r++) {
         mapGrid[r] = [];
         for (let c = 0; c < COLS; c++) {
             if (c === 0 || c === COLS - 1) {
-                mapGrid[r][c] = 1; // 좌우 기둥벽
+                mapGrid[r][c] = 1;
             } else if (r === 0 || r === ROWS - 1) {
-                // 천장 및 하단 바닥 통과 구간 (중앙 오픈 기믹)
                 if (c >= 12 && c <= 19) mapGrid[r][c] = 0;
                 else mapGrid[r][c] = 1;
             } else {
@@ -323,33 +362,27 @@ function generateStageLayout(lvl) {
         }
     }
 
-    // 2. 난이도 단계별 플랫폼 자동 분기 배치 수학공식
     const patternType = lvl % 5;
     if (patternType === 1) {
-        // 전통 3단 일자형 대칭형 레이아웃
         buildPlatformRow(5, 4, 27, 2);
         buildPlatformRow(10, 8, 23, 2);
         buildPlatformRow(15, 4, 27, 2);
     } else if (patternType === 2) {
-        // 중앙 집중형 크로스 아일랜드 레이아웃
         buildPlatformRow(6, 10, 21, 2);
         buildPlatformRow(11, 4, 12, 2);
         buildPlatformRow(11, 19, 27, 2);
         buildPlatformRow(16, 8, 23, 2);
     } else if (patternType === 3) {
-        // 엇갈린 지그재그 격자형 챌린지 계단
         buildPlatformRow(5, 2, 14, 2);
         buildPlatformRow(9, 17, 29, 2);
         buildPlatformRow(13, 2, 14, 2);
         buildPlatformRow(17, 17, 29, 2);
     } else if (patternType === 4) {
-        // 복합 스플릿 나선 동굴 미로
-        buildPlatformRow(6, 4, 27, 1); // 중간 벽돌 배리어 추가
+        buildPlatformRow(6, 4, 27, 1);
         buildPlatformRow(10, 2, 13, 2);
         buildPlatformRow(10, 18, 29, 2);
         buildPlatformRow(15, 7, 24, 2);
     } else {
-        // 원작 1스테이지 모마주 기본 핑퐁 패턴
         buildPlatformRow(5, 4, 27, 1);
         buildPlatformRow(9, 6, 25, 2);
         buildPlatformRow(13, 4, 13, 2);
@@ -394,12 +427,11 @@ class Player {
     }
     update() {
         this.animFrame++;
-        // 컨트롤 디스패치 물리화
         if (inputs.left) { this.vx = -3.4; this.dir = -1; }
         else if (inputs.right) { this.vx = 3.4; this.dir = 1; }
         else { this.vx *= 0.82; }
 
-        this.vy += 0.38; // 중력 적용선
+        this.vy += 0.38;
 
         if (inputs.jump && this.isOnGround) {
             this.vy = -9.2;
@@ -407,7 +439,6 @@ class Player {
             triggerSFX('jump');
         }
 
-        // X, Y 이동축 검사 루틴 및 좌표 피드백
         this.x += this.vx;
         if (this.x < TILE_SIZE) this.x = TILE_SIZE;
         if (this.x + this.width > canvas.width - TILE_SIZE) this.x = canvas.width - TILE_SIZE - this.width;
@@ -415,11 +446,9 @@ class Player {
         this.y += this.vy;
         this.handleYCollisions();
 
-        // 맵 상하 무한게이트 연결성 트랜스레이션
         if (this.y > canvas.height) { this.y = -this.height; this.isOnGround = false; }
         else if (this.y < -this.height) { this.y = canvas.height; }
 
-        // 거품 공격 트리거 제어부
         if (this.shootCooldown > 0) this.shootCooldown--;
         if (inputs.shoot && this.shootCooldown === 0) {
             activeBubbles.push(new Bubble(this.x + (this.dir === 1 ? 20 : -12), this.y + 4, this.dir));
@@ -429,7 +458,7 @@ class Player {
     }
     handleYCollisions() {
         this.isOnGround = false;
-        if (this.vy < 0) return; // 상승 도중 관통 허용
+        if (this.vy < 0) return;
 
         const leftX = this.x + 4;
         const rightX = this.x + this.width - 4;
@@ -448,18 +477,15 @@ class Player {
         }
     }
     draw() {
-        // 고해상도 아기공룡 버블룬 백터 그래픽 디테일 묘사
         ctx.save();
         ctx.shadowBlur = 8;
         ctx.shadowColor = "rgba(0, 255, 150, 0.5)";
         
-        // 메인 바디 구체
         ctx.fillStyle = '#00ff66';
         ctx.beginPath();
         ctx.arc(this.x + 12, this.y + 12, 11, 0, Math.PI * 2);
         ctx.fill();
 
-        // 달리기 발 애니메이션 프레임 동적 렌더링
         ctx.fillStyle = '#ffffff';
         const walkCycle = Math.floor(this.animFrame / 6) % 2;
         if (walkCycle === 0) {
@@ -470,13 +496,11 @@ class Player {
             ctx.fillRect(this.x + 16, this.y + 22, 5, 3);
         }
 
-        // 공룡 배주머니 (귀여운 노란색 아치 구조)
         ctx.fillStyle = '#ffff44';
         ctx.beginPath();
         ctx.arc(this.x + (this.dir === 1 ? 17 : 7), this.y + 15, 6, 0, Math.PI, false);
         ctx.fill();
 
-        // 오락실 감성 큰 눈망울 표현
         ctx.fillStyle = '#ffffff';
         const eyeX = this.dir === 1 ? this.x + 14 : this.x + 4;
         ctx.fillRect(eyeX, this.y + 4, 6, 8);
@@ -484,7 +508,6 @@ class Player {
         const pupilX = this.dir === 1 ? this.x + 18 : this.x + 4;
         ctx.fillRect(pupilX, this.y + 6, 2, 4);
 
-        // 등지느러미 피라미드 주황 뿔 액센트
         ctx.fillStyle = '#ff4400';
         const spineX = this.dir === 1 ? this.x : this.x + 20;
         ctx.fillRect(spineX, this.y + 3, 4, 4);
@@ -502,7 +525,7 @@ class Enemy {
     constructor(x, y, variantType) {
         this.x = x;
         this.y = y;
-        this.variant = variantType; // 'ZenChan', 'Mighta', 'Banebou'
+        this.variant = variantType;
         this.width = 20;
         this.height = 20;
         this.isTrapped = false;
@@ -510,16 +533,15 @@ class Enemy {
         this.vy = 0;
         this.animTick = Math.random() * 100;
 
-        // 변종 난이도별 기틀 능력치 부여 스케일러
         if (variantType === 'Mighta') {
-            this.speed = 1.8 + (currentLevel * 0.02); // 스테이지 진행 비례 가속
-            this.color = '#ff4400'; // 주황 불타는 개체
+            this.speed = 1.8 + (currentLevel * 0.02);
+            this.color = '#ff4400';
         } else if (variantType === 'Banebou') {
             this.speed = 1.2;
-            this.color = '#ffff00'; // 쉬지않고 날뛰는 노란 개체
+            this.color = '#ffff00';
         } else {
             this.speed = 1.3 + (currentLevel * 0.01);
-            this.color = '#cc00cc'; // 기본 정통파 보라색 개체
+            this.color = '#cc00cc';
         }
         this.vx = Math.random() > 0.5 ? this.speed : -this.speed;
     }
@@ -527,13 +549,12 @@ class Enemy {
         this.animTick++;
         if (this.isTrapped) {
             this.trapTimer++;
-            // 약 8초 동안 플레이어가 안터치하면 폭주 분노 모드로 버블 자가 파괴 탈출
             if (this.trapTimer > 480) {
                 this.isTrapped = false;
                 this.trapTimer = 0;
-                this.speed *= 1.6; // 폭주 가속
+                this.speed *= 1.6;
                 this.vx = this.vx > 0 ? this.speed : -this.speed;
-                this.color = '#ff0000'; // 분노의 붉은색 강제 치환
+                this.color = '#ff0000';
             }
             return;
         }
@@ -541,18 +562,14 @@ class Enemy {
         this.vy += 0.35;
         this.x += this.vx;
 
-        // 벽 반사 제어부
         if (this.x < TILE_SIZE || this.x + this.width > canvas.width - TILE_SIZE) {
             this.vx *= -1;
             this.x = this.x < TILE_SIZE ? TILE_SIZE + 1 : canvas.width - TILE_SIZE - this.width - 1;
         }
 
-        // 특성 인공지능 패턴 주입 루프
         if (this.variant === 'Banebou') {
-            // 바네보는 무조건 바닥 접지 시 강력 리바운드 도약 실행
             if (this.vy === 0 && Math.random() < 0.4) this.vy = -8.5;
         } else {
-            // 일반 개체는 낮은 확률로 위층 추적용 유동형 무작위 점프 가동
             if (Math.random() < 0.008) this.vy = -7.5;
         }
 
@@ -576,26 +593,22 @@ class Enemy {
     draw() {
         ctx.save();
         if (this.isTrapped) {
-            // 버블화 상태 점멸 렌더 페이즈
             ctx.fillStyle = Math.floor(this.animTick / 10) % 2 === 0 ? '#ff88ff' : '#00ffff';
             ctx.beginPath();
             ctx.arc(this.x + 10, this.y + 10, 13, 0, Math.PI * 2);
             ctx.fill();
-            // 가둬진 눈동자 원경 처리
             ctx.fillStyle = '#000000';
             ctx.fillRect(this.x + 6, this.y + 6, 2, 5);
             ctx.fillRect(this.x + 12, this.y + 6, 2, 5);
         } else {
             ctx.fillStyle = this.color;
             ctx.fillRect(this.x, this.y, this.width, this.height);
-            // 눈가 및 아케이드 스프라이트 화소 디테일 보완
             ctx.fillStyle = '#ffffff';
             const lookOffset = this.vx > 0 ? 12 : 2;
             ctx.fillRect(this.x + lookOffset, this.y + 4, 6, 6);
             ctx.fillStyle = '#000000';
             ctx.fillRect(this.x + lookOffset + (this.vx > 0 ? 4 : 0), this.y + 6, 2, 2);
             
-            // 바네보 고유 태엽/스프링 다리 시각화 요소 가미
             if (this.variant === 'Banebou') {
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 2;
@@ -618,31 +631,29 @@ class Bubble {
         this.x = x;
         this.y = y;
         this.dir = dir;
-        this.vx = dir * 8.5; // 발사 초기 탄속 가속도
+        this.vx = dir * 8.5;
         this.life = 0;
-        this.state = 'shoot'; // 'shoot' -> 'float'
+        this.state = 'shoot';
     }
     update() {
         this.life++;
         if (this.state === 'shoot') {
             this.x += this.vx;
-            this.vx *= 0.84; // 수평 감쇄 마찰 법칙 적용
+            this.vx *= 0.84;
             if (Math.abs(this.vx) < 0.4) this.state = 'float';
 
-            // 직진 비행 구간 내 유효 타격 트랩 판정 매트릭스 연동
             activeEnemies.forEach(e => {
                 if (!e.isTrapped && Math.abs(this.x - (e.x + 10)) < 22 && Math.abs(this.y - (e.y + 10)) < 22) {
                     e.isTrapped = true;
                     e.trapTimer = 0;
-                    this.life = 9999; // 타격된 오리지널 거품은 즉시 마킹 소멸 유도
+                    this.life = 9999;
                     triggerSFX('trap');
                 }
             });
         } else {
-            // 부력 상승기 및 미세 파동 물리 변조공식 적용
             this.y -= 0.75;
             this.x += Math.sin(this.life * 0.08) * 1.3;
-            if (this.y < 30) this.y = 30; // 천장 헤드룸 고정 고리
+            if (this.y < 30) this.y = 30;
         }
     }
     draw() {
@@ -653,7 +664,6 @@ class Bubble {
         ctx.beginPath();
         ctx.arc(this.x, this.y, 9, 0, Math.PI * 2);
         ctx.stroke();
-        // 맺힌 반사광 아크 라이팅 포인트 효과
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(this.x - 4, this.y - 4, 2, 2);
         ctx.restore();
@@ -672,7 +682,6 @@ class RewardItem {
         this.life = 0;
         this.isGrounded = false;
         
-        // 스테이지 레벨에 따른 과일 등급 해금 텍스처 컬러링 스위칭 구조
         const r = Math.random();
         if (r < 0.2) { this.scoreValue = 700; this.color = '#ff3333'; this.label = 'CHERRY'; }
         else if (r < 0.5) { this.scoreValue = 1000; this.color = '#ffff33'; this.label = 'BANANA'; }
@@ -696,20 +705,18 @@ class RewardItem {
             this.isGrounded = false;
         }
 
-        // 보글보글 고유 기믹: 아이템이 바닥면을 타고 스르륵 슬라이딩 무브 수행
         if (this.isGrounded) {
             this.x += this.slideDir * 0.8;
             if (this.x < TILE_SIZE || this.x > canvas.width - TILE_SIZE - 16) this.slideDir *= -1;
         }
     }
     draw() {
-        if (this.life > 500 && Math.floor(this.life / 8) % 2 === 0) return; // 소멸 전 깜빡임 기능
+        if (this.life > 500 && Math.floor(this.life / 8) % 2 === 0) return;
         ctx.save();
         ctx.fillStyle = this.color;
         ctx.beginPath();
         ctx.arc(this.x + 8, this.y + 9, 7, 0, Math.PI * 2);
         ctx.fill();
-        // 과일 꼭지 이파리 녹색 데코레이션 그리기
         ctx.strokeStyle = '#33cc33';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -720,7 +727,6 @@ class RewardItem {
     }
 }
 
-// 파티클 스파크 연출 이펙트 구조체
 class Particle {
     constructor(x, y, color) {
         this.x = x; this.y = y; this.color = color;
@@ -756,16 +762,14 @@ function setupStageEntities(lvl) {
 
     generateStageLayout(lvl);
 
-    // 레벨에 따른 적 수량 가중치 산출 및 하이브리드 변종 스폰 배치 공식
     const baseCount = 3 + Math.floor(lvl / 4);
-    const enemyCount = Math.min(baseCount, 8); // 최대 한스테이지 8마리 조율
+    const enemyCount = Math.min(baseCount, 8);
 
     for (let i = 0; i < enemyCount; i++) {
         let spawnedVariant = 'ZenChan';
         if (lvl >= 3 && i % 3 === 1) spawnedVariant = 'Mighta';
         if (lvl >= 6 && i % 3 === 2) spawnedVariant = 'Banebou';
         
-        // 층층별 분산 배치 기하학 좌표 연산
         const targetX = 80 + (i * 65);
         const targetY = 60 + ((i % 3) * 100);
         activeEnemies.push(new Enemy(targetX, targetY, spawnedVariant));
@@ -773,7 +777,6 @@ function setupStageEntities(lvl) {
 }
 
 function resolveGameCollisions() {
-    // 1. 플레이어 몸체와 둥실 버블 간 연쇄 충돌 감지 피드백선
     for (let bIdx = activeBubbles.length - 1; bIdx >= 0; bIdx--) {
         const bub = activeBubbles[bIdx];
         if (bub.state === 'float') {
@@ -781,7 +784,6 @@ function resolveGameCollisions() {
             const pCenterY = playerInstance.y + 12;
             const dist = Math.hypot(pCenterX - bub.x, pCenterY - bub.y);
             if (dist < 23) {
-                // 일반 거품 터뜨리기 (소량 파편 연출)
                 createBurstParticles(bub.x, bub.y, '#00ffff');
                 activeBubbles.splice(bIdx, 1);
                 updateScore(10);
@@ -790,7 +792,6 @@ function resolveGameCollisions() {
         }
     }
 
-    // 2. 플레이어 몸체와 갇힌 적 팝 연쇄 폭발 사슬 분석계
     for (let eIdx = activeEnemies.length - 1; eIdx >= 0; eIdx--) {
         const en = activeEnemies[eIdx];
         if (en.isTrapped) {
@@ -798,7 +799,6 @@ function resolveGameCollisions() {
             const pCenterY = playerInstance.y + 12;
             const dist = Math.hypot(pCenterX - (en.x + 10), pCenterY - (en.y + 10));
             if (dist < 26) {
-                // 대형 폭발 스파크 방출 및 적 제거 후 전리품 스폰 드롭
                 createBurstParticles(en.x + 10, en.y + 10, '#ff00ff', 15);
                 activeItems.push(new RewardItem(en.x, en.y));
                 activeEnemies.splice(eIdx, 1);
@@ -806,19 +806,17 @@ function resolveGameCollisions() {
                 triggerSFX('pop');
             }
         } else {
-            // 살아 움직이는 치명적 적 군체와 플레이어 충돌 시 사망 대용 하드 패널티 리셋
             const pCenterX = playerInstance.x + 12;
             const pCenterY = playerInstance.y + 12;
             const dist = Math.hypot(pCenterX - (en.x + 10), pCenterY - (en.y + 10));
             if (dist < 18) {
                 createBurstParticles(playerInstance.x + 12, playerInstance.y + 12, '#ff4444', 25);
-                playerInstance.reset(); // 목숨 감소 대체 기지 포지션 리셋
-                updateScore(-500); // 패널티 스코어 삭감 조치
+                playerInstance.reset();
+                updateScore(-500);
             }
         }
     }
 
-    // 3. 과일 전리품 파밍 수집 조건 루프
     for (let iIdx = activeItems.length - 1; iIdx >= 0; iIdx--) {
         const item = activeItems[iIdx];
         if (Math.abs((playerInstance.x + 12) - (item.x + 8)) < 18 && Math.abs((playerInstance.y + 12) - (item.y + 8)) < 18) {
@@ -846,13 +844,11 @@ function updateScore(amount) {
     }
     document.getElementById('txt-p1-score').innerText = String(score).padStart(6, '0');
 
-    // 4. 요청 하이라이트: 일정 점수(10000점 단위 누적) 도달 시 보너스 라이프 격 보너스 점수 지급 이벤트 엔진
     const currentStack = Math.floor(score / 10000);
     if (currentStack > bonusThresholdCount) {
         bonusThresholdCount = currentStack;
-        score += 3000; // 대형 보너스 점수 즉시 지급 밸트 연결
+        score += 3000;
         triggerSFX('bonus');
-        // 오버레이 점수 즉각 리비전 갱신
         document.getElementById('txt-p1-score').innerText = String(score).padStart(6, '0');
     }
 }
@@ -862,14 +858,12 @@ function drawWorldGrid() {
         for (let c = 0; c < COLS; c++) {
             const tile = mapGrid[r][c];
             if (tile === 1) {
-                // 네온 블루 외곽 성벽 캐비닛 비주얼
                 ctx.fillStyle = '#1111aa';
                 ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 ctx.strokeStyle = '#3344ff';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(c * TILE_SIZE + 1, r * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
             } else if (tile === 2) {
-                // 오렌지 빛깔 아케이드 점프스루 플랫폼 난간 구조
                 ctx.fillStyle = '#ffaa00';
                 ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, 6);
                 ctx.fillStyle = '#884400';
@@ -898,7 +892,6 @@ window.addEventListener('keyup', e => {
     if (e.key === 'x' || e.key === ' ') inputs.shoot = false;
 });
 
-// 아이폰 사파리 더블탭 확대 줌 피하고 완벽 고해상도 조작 매핑 유도부 인터셉터
 function bindVirtualTouchKey(elementId, actionKey) {
     const btn = document.getElementById(elementId);
     
@@ -927,7 +920,6 @@ function masterGameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (gameState === 'TITLE') {
-        // 타이틀 복고풍 렌더링 화면
         ctx.fillStyle = '#00ffff';
         ctx.font = 'bold 32px "Courier New", monospace';
         ctx.textAlign = 'center';
@@ -943,12 +935,11 @@ function masterGameLoop() {
         }
         
         ctx.fillStyle = '#888888';
-        ctx.font = '12px sans-serif';
-        ctx.fillText("PC: Arrow Keys / A,D,W & X, Space | iOS: Touch Virtual Pad", 320, 400);
+        ctx.font = '11px sans-serif';
+        ctx.fillText("PC: Arrow Keys / A,D,W & X, Space | Mobile: Rotate & Touch", 320, 400);
     } 
     
     else if (gameState === 'LEVEL_INTRO') {
-        // 판 시작 전 원작 감성 레벨 트랜지션 타이틀 스크린 기믹
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 28px "Courier New", monospace';
         ctx.textAlign = 'center';
@@ -958,26 +949,23 @@ function masterGameLoop() {
         ctx.font = '16px "Courier New", monospace';
         ctx.fillText("READY!", 320, 250);
 
-        if (stateTimer > 90) { // 약 1.5초 대기 연출 후 진입
+        if (stateTimer > 90) {
             gameState = 'PLAYING';
             stateTimer = 0;
         }
     } 
     
     else if (gameState === 'PLAYING') {
-        // 엔티티 업데이트 사이클
         playerInstance.update();
         activeBubbles.forEach(b => b.update());
         activeEnemies.forEach(e => e.update());
         activeItems.forEach(i => i.update());
         activeParticles.forEach(p => p.update());
 
-        // 충돌 중재 및 필터 어셈블리 풀링
         resolveGameCollisions();
         activeBubbles = activeBubbles.filter(b => b.life < 1000 && b.y > 0);
         activeParticles = activeParticles.filter(p => p.alpha > 0);
 
-        // 월드 드로잉 페이즈
         drawWorldGrid();
         activeItems.forEach(i => i.draw());
         activeBubbles.forEach(b => b.draw());
@@ -985,7 +973,6 @@ function masterGameLoop() {
         playerInstance.draw();
         activeParticles.forEach(p => p.draw());
 
-        // 스테이지 올클리어 승리 조건 체크 (모든 적 소멸 시)
         if (activeEnemies.length === 0) {
             if (currentLevel >= MAX_LEVELS) {
                 gameState = 'GAME_OVER';
@@ -998,7 +985,6 @@ function masterGameLoop() {
     } 
     
     else if (gameState === 'LEVEL_CLEAR') {
-        // 레벨이 끝나면 타이틀이 나오는 완벽 트랜지션 연출
         drawWorldGrid();
         playerInstance.draw();
 
@@ -1020,7 +1006,6 @@ function masterGameLoop() {
     } 
     
     else if (gameState === 'GAME_OVER') {
-        // 최종 엔딩 혹은 게임오버 화면 처리선
         ctx.fillStyle = '#ff3333';
         ctx.font = 'bold 36px "Courier New", monospace';
         ctx.textAlign = 'center';
@@ -1042,7 +1027,6 @@ function masterGameLoop() {
     requestAnimationFrame(masterGameLoop);
 }
 
-// 타이틀 터치/클릭 기동 액터 전선
 canvas.addEventListener('click', () => {
     initAudioEngine();
     if (gameState === 'TITLE') {
@@ -1060,7 +1044,6 @@ canvas.addEventListener('click', () => {
     }
 });
 
-// 엔진 구동 실행 시작선
 masterGameLoop();
 </script>
 </body>
